@@ -2,6 +2,7 @@
 // Shop overlay and detector readout are added by later features.
 import { formatNumber, formatMoney } from './game.js';
 import { TOTAL_STRANDS } from './haystack.js';
+import { UPGRADES } from './upgrades.js';
 
 export class UI {
   constructor(game) {
@@ -31,8 +32,20 @@ export class UI {
         </div>
       </div>
       <div id="toast"></div>
+      <div id="shop" style="display:none">
+        <div class="shop-panel">
+          <h2>设备商店</h2>
+          <p class="shop-sub">一切皆有现货 — 唯一的限制是你的钱包。(B 关闭)</p>
+          <div id="shop-items"></div>
+        </div>
+      </div>
     `;
     document.body.appendChild(this.root);
+
+    this.elShop = document.getElementById('shop');
+    this.elShopItems = document.getElementById('shop-items');
+    this.upgradeState = null; // injected by main
+    this.shopOpen = false;
 
     this.elMoney = document.getElementById('stat-money');
     this.elBag = document.getElementById('stat-bag');
@@ -70,6 +83,53 @@ export class UI {
     this.elToast.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => this.elToast.classList.remove('show'), 2200);
+  }
+
+  toggleShop(force) {
+    this.shopOpen = force !== undefined ? force : !this.shopOpen;
+    this.elShop.style.display = this.shopOpen ? 'flex' : 'none';
+    if (this.shopOpen) {
+      document.exitPointerLock();
+      this.renderShop();
+    }
+    return this.shopOpen;
+  }
+
+  renderShop() {
+    const g = this.game;
+    this.elShopItems.innerHTML = '';
+    for (const def of UPGRADES) {
+      const next = this.upgradeState.nextLevel(def.id);
+      const owned = this.upgradeState.owned[def.id];
+      const row = document.createElement('div');
+      row.className = 'shop-item';
+      const pips = def.levels
+        .map((_, i) => `<span class="pip ${i < owned ? 'owned' : ''}"></span>`)
+        .join('');
+      row.innerHTML = `
+        <div class="info">
+          <div class="name">${def.name} <span class="pips">${pips}</span></div>
+          <div class="desc">${def.desc}</div>
+        </div>
+        <button class="buy"></button>
+      `;
+      const btn = row.querySelector('.buy');
+      if (!next) {
+        btn.textContent = '已满级';
+        btn.disabled = true;
+      } else {
+        btn.textContent = formatMoney(next.level.cost);
+        btn.disabled = g.money < next.level.cost;
+        btn.addEventListener('click', () => {
+          const result = this.upgradeState.buy(g, def.id);
+          if (result === 'ok') {
+            this.toast(`已购买:${def.name} Lv.${owned + 1}`);
+            this.renderShop();
+          }
+        });
+      }
+      this.elShopItems.appendChild(row);
+    }
   }
 }
 
@@ -113,4 +173,34 @@ const CSS = `
   padding: 10px 22px; border-radius: 8px; font-size: 16px; opacity: 0; transition: all 0.25s;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#shop {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 7, 4, 0.66); pointer-events: auto;
+}
+.shop-panel {
+  width: 560px; max-height: 76vh; overflow-y: auto; padding: 26px 30px;
+  background: rgba(22, 16, 9, 0.96); border: 1px solid rgba(255, 214, 130, 0.35);
+  border-radius: 12px; color: #efe0b8;
+}
+.shop-panel h2 { color: #ffcf6e; letter-spacing: 3px; font-size: 24px; }
+.shop-sub { color: #a8946a; font-size: 13px; margin: 6px 0 18px; }
+.shop-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 6px; border-top: 1px solid rgba(255, 214, 130, 0.12);
+}
+.shop-item .name { font-size: 16px; color: #ffe9b0; display: flex; align-items: center; gap: 8px; }
+.shop-item .desc { font-size: 13px; color: #b7a678; margin-top: 3px; }
+.pips { display: inline-flex; gap: 3px; }
+.pip {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid rgba(255, 214, 130, 0.5); display: inline-block;
+}
+.pip.owned { background: #ffcf6e; }
+.buy {
+  min-width: 96px; padding: 8px 14px; font-size: 15px; cursor: pointer;
+  background: #3a2c12; color: #ffd98a; border: 1px solid rgba(255, 214, 130, 0.5);
+  border-radius: 6px;
+}
+.buy:hover:not(:disabled) { background: #57421c; }
+.buy:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
