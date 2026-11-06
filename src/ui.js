@@ -32,6 +32,19 @@ export class UI {
         </div>
       </div>
       <div id="toast"></div>
+      <div id="detector" style="display:none">
+        <span class="det-label">探测器</span>
+        <span id="det-signal">0%</span>
+        <span id="det-dir"></span>
+      </div>
+      <div id="win" style="display:none">
+        <div class="win-panel">
+          <h1>找到了!</h1>
+          <p class="win-sub">大海捞针 — 你真的做到了。</p>
+          <div id="win-stats"></div>
+          <button id="win-restart">再来一次</button>
+        </div>
+      </div>
       <div id="shop" style="display:none">
         <div class="shop-panel">
           <h2>设备商店</h2>
@@ -44,6 +57,12 @@ export class UI {
 
     this.elShop = document.getElementById('shop');
     this.elShopItems = document.getElementById('shop-items');
+    this.elDetector = document.getElementById('detector');
+    this.elDetSignal = document.getElementById('det-signal');
+    this.elDetDir = document.getElementById('det-dir');
+    this.elWin = document.getElementById('win');
+    this.elWinStats = document.getElementById('win-stats');
+    document.getElementById('win-restart').addEventListener('click', () => location.reload());
     this.upgradeState = null; // injected by main
     this.shopOpen = false;
 
@@ -131,6 +150,34 @@ export class UI {
       this.elShopItems.appendChild(row);
     }
   }
+
+  // progress 0..1 toward the needle's depth; relAngle is the signed angle
+  // between the player's facing and the needle (-PI..PI), or null.
+  updateDetector(level, progress, relAngle) {
+    this.elDetector.style.display = level > 0 ? 'flex' : 'none';
+    if (level <= 0) return;
+    const pct = Math.floor(progress * 100);
+    this.elDetSignal.textContent = `${pct}%`;
+    this.elDetSignal.className = pct > 90 ? 'hot' : pct > 60 ? 'warm' : '';
+    if (level >= 2 && relAngle !== null) {
+      const deg = relAngle * 180 / Math.PI;
+      this.elDetDir.textContent = Math.abs(deg) < 12 ? '↑' : deg > 0 ? '→' : '←';
+    } else {
+      this.elDetDir.textContent = '';
+    }
+  }
+
+  showWin(game) {
+    document.exitPointerLock();
+    const mins = Math.floor(game.elapsedSeconds / 60);
+    const secs = Math.floor(game.elapsedSeconds % 60);
+    this.elWinStats.innerHTML = `
+      <div class="win-row"><span>用时</span><b>${mins} 分 ${secs} 秒</b></div>
+      <div class="win-row"><span>挖出干草</span><b>${formatNumber(game.totalDug)} 根</b></div>
+      <div class="win-row"><span>最终资金</span><b>${formatMoney(game.money)}</b></div>
+    `;
+    this.elWin.style.display = 'flex';
+  }
 }
 
 const CSS = `
@@ -203,4 +250,36 @@ const CSS = `
 }
 .buy:hover:not(:disabled) { background: #57421c; }
 .buy:disabled { opacity: 0.4; cursor: not-allowed; }
+#detector {
+  position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 10px;
+  background: rgba(12, 9, 5, 0.62); border: 1px solid rgba(140, 200, 255, 0.3);
+  border-radius: 6px; padding: 8px 14px; color: #cfe6ff; font-size: 15px;
+}
+.det-label { color: #7fa8cc; font-size: 13px; }
+#det-signal { font-weight: 600; min-width: 44px; text-align: right; }
+#det-signal.warm { color: #ffd98a; }
+#det-signal.hot { color: #ff9a5a; }
+#det-dir { font-size: 20px; width: 20px; text-align: center; color: #8fd0ff; }
+#win {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 6, 3, 0.8); pointer-events: auto;
+}
+.win-panel {
+  text-align: center; padding: 44px 64px; color: #efe0b8;
+  background: rgba(24, 18, 10, 0.97); border: 1px solid rgba(255, 214, 130, 0.5);
+  border-radius: 14px;
+}
+.win-panel h1 { font-size: 40px; color: #ffcf6e; letter-spacing: 6px; margin-bottom: 8px; }
+.win-sub { color: #b7a678; margin-bottom: 24px; }
+.win-row {
+  display: flex; justify-content: space-between; gap: 40px; padding: 8px 4px;
+  border-top: 1px solid rgba(255, 214, 130, 0.15); font-size: 16px;
+}
+.win-row b { color: #ffe9b0; }
+#win-restart {
+  margin-top: 26px; padding: 10px 30px; font-size: 16px; cursor: pointer;
+  background: #3a2c12; color: #ffd98a; border: 1px solid rgba(255, 214, 130, 0.5);
+  border-radius: 8px;
+}
+#win-restart:hover { background: #57421c; }
 `;
