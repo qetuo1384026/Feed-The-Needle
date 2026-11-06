@@ -8,6 +8,7 @@ import { Digging } from './digging.js';
 import { UI } from './ui.js';
 import { SellBelt } from './sellbelt.js';
 import { UpgradeState } from './upgrades.js';
+import { MachinePark } from './machines.js';
 
 const app = document.getElementById('app');
 
@@ -34,6 +35,7 @@ const ui = new UI(game);
 const sellBelt = new SellBelt(scene);
 const upgradeState = new UpgradeState();
 ui.upgradeState = upgradeState;
+const machines = new MachinePark(scene, upgradeState);
 
 scene.add(camera); // camera holds the shovel view-model
 
@@ -62,6 +64,8 @@ renderer.setAnimationLoop(() => {
   player.update(dt);
   digging.update(dt);
   sellBelt.update(dt);
+  game.autoTick(dt);
+  machines.update(dt, t, game.autoRate > 0 && !haystack.isCleared);
   warehouse.update(dt, t);
 
   // Contextual hint: what the crosshair is pointing at / where the player is.
