@@ -9,6 +9,7 @@ import { UI } from './ui.js';
 import { SellBelt } from './sellbelt.js';
 import { UpgradeState } from './upgrades.js';
 import { MachinePark } from './machines.js';
+import { Needle } from './needle.js';
 
 const app = document.getElementById('app');
 
@@ -36,17 +37,23 @@ const sellBelt = new SellBelt(scene);
 const upgradeState = new UpgradeState();
 ui.upgradeState = upgradeState;
 const machines = new MachinePark(scene, upgradeState);
+const needle = new Needle(scene, haystack, game);
 
 scene.add(camera); // camera holds the shovel view-model
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyB') {
     ui.toggleShop();
-  } else if (e.code === 'KeyE' && player.locked && sellBelt.isPlayerInRange(player.position)) {
-    const earned = game.sellAll();
-    if (earned > 0) {
-      sellBelt.flashSold();
-      ui.toast(`售出干草 +${formatMoney(earned)}`);
+  } else if (e.code === 'KeyE' && player.locked) {
+    if (needle.canPickUp(player.position)) {
+      needle.collect();
+      ui.showWin(game);
+    } else if (sellBelt.isPlayerInRange(player.position)) {
+      const earned = game.sellAll();
+      if (earned > 0) {
+        sellBelt.flashSold();
+        ui.toast(`售出干草 +${formatMoney(earned)}`);
+      }
     }
   }
 });
@@ -66,12 +73,30 @@ renderer.setAnimationLoop(() => {
   sellBelt.update(dt);
   game.autoTick(dt);
   machines.update(dt, t, game.autoRate > 0 && !haystack.isCleared);
+  needle.update(dt, t);
   warehouse.update(dt, t);
 
-  // Contextual hint: what the crosshair is pointing at / where the player is.
-  if (player.locked && !ui.shopOpen) {
+  // Metal detector readout: signal strength always; direction at level 2.
+  let relAngle = null;
+  if (game.detectorLevel >= 2) {
+    const dx = needle.revealed ? needle.position.x - player.position.x : needle.azimuth;
+    if (needle.revealed) {
+      const dz = needle.position.z - player.position.z;
+      const target = Math.atan2(-dx, -dz); // world angle matching yaw convention
+      relAngle = Math.atan2(Math.sin(player.yaw - target), Math.cos(player.yaw - target));
+    } else {
+      // pre-reveal the detector only senses a vague region
+      relAngle = Math.sin(t * 0.4) * 1.2;
+    }
+  }
+  ui.updateDetector(game.detectorLevel, needle.signalProgress, relAngle);
+
+  // Contextual hint: needle pickup > sell belt > digging.
+  if (player.locked && !ui.shopOpen && !game.needleFound) {
     const nearBelt = sellBelt.isPlayerInRange(player.position);
-    if (nearBelt && game.carried > 0) {
+    if (needle.canPickUp(player.position)) {
+      ui.setHint('E — 拔出那根针!');
+    } else if (nearBelt && game.carried > 0) {
       ui.setHint(`E — 出售 ${formatNumber(game.carried)} 根干草`);
     } else if (nearBelt) {
       ui.setHint('售卖带 — 先去挖些干草');
